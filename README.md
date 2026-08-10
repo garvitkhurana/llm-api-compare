@@ -1,4 +1,4 @@
-# llm-api-compare — 0→100 LLM harness
+# llm-harness — 0→100 LLM path
 
 Progressive path from one API message to **agents**, **evals**, and an optional **frameworks** lesson.  
 Mostly **Python scripts** + [lessons/NOTES.md](lessons/NOTES.md). Core path has no framework.
@@ -108,8 +108,8 @@ notebooks/         # optional tables only
 {
   "mcpServers": {
     "llm-harness-tools": {
-      "command": "/ABS/PATH/llm-api-compare/.venv/bin/python",
-      "args": ["/ABS/PATH/llm-api-compare/mcp_server.py"]
+      "command": "/ABS/PATH/llm-harness/.venv/bin/python",
+      "args": ["/ABS/PATH/llm-harness/mcp_server.py"]
     }
   }
 }
