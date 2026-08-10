@@ -44,7 +44,8 @@ A tool is a **Python function** you define. Call it yourself — no LLM yet.
 
 ## 05 — Tool calling
 Model emits `tool_calls` → you `run_tool` locally → append `role: tool` → chat again.  
-Prompt hits calculator / reverse_string / word_stats; loop until final text (`MAX_ROUNDS`). Prints raw + tool lines with `---` separators.
+Prompt hits calculator / reverse_string / word_stats; loop until final text (`MAX_ROUNDS`).  
+Banners per round; prints high-level **final convo memory** once at the end.
 
 ## 06 — MCP
 Same tools over a standard bus: start `mcp_server.py` → `list_tools` → `call_tool`.  
