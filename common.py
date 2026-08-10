@@ -24,7 +24,7 @@ MODEL_CHAT = os.environ.get(
 # Tool-calling / agent / agent-evals — must support `tools`
 MODEL_TOOLS = os.environ.get(
     "OPENROUTER_MODEL_TOOLS",
-    "openrouter/free",
+    "openai/gpt-oss-20b:free",
 )
 
 

@@ -41,3 +41,7 @@ Score **final text** against checks (`contains`, `max_chars`, …). Cases in `ev
 
 ## 11 — Agent evals
 Score **behavior**: task success, tools used, step budget. Cases in `evals/agent_cases.jsonl`.
+
+## 12 — Frameworks (optional)
+Same task as the agent lesson, twice: raw `agent.py` vs LangChain `AgentExecutor`.  
+Frameworks are sugar on messages + tool_calls + the loop — learn 00–11 first.
