@@ -43,8 +43,8 @@ Optional table: `notebooks/03_chat_compare.ipynb`.
 A tool is a **Python function** you define. Call it yourself — no LLM yet.
 
 ## 05 — Tool calling
-The **model** chooses a tool via `tool_calls`. You still execute it locally, then append the result.  
-Uses `MODEL_TOOLS` (must support OpenRouter `tools`).
+Model emits `tool_calls` → you `run_tool` locally → append `role: tool` → chat again.  
+Prompt hits calculator / reverse_string / word_stats; loop until final text (`MAX_ROUNDS`). Prints raw + tool lines with `---` separators.
 
 ## 06 — MCP
 Same tools over a standard bus: start `mcp_server.py` → `list_tools` → `call_tool`.  

@@ -7,60 +7,69 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from common import MODEL_TOOLS, chat, choice_message, finish_reason, pretty
+from common import MODEL_TOOLS, chat, choice_message, pretty
 from tools import TOOL_SPECS, run_tool
+
+MAX_ROUNDS = 6  # some models call one tool per turn
 
 
 def main() -> None:
     messages = [
         {
             "role": "user",
-            "content": "Use the calculator tool to compute (17 + 4) * 3. Then state the value.",
+            "content": (
+                "Use tools for all of the following, then summarize the results:\n"
+                "1) calculator: compute (17 + 4) * 3\n"
+                "2) reverse_string: reverse the text 'hello world'\n"
+                "3) word_stats: analyze the text 'hello world from lesson 05'\n"
+                "Call every tool you need before answering."
+            ),
         }
     ]
-    data = chat(
-        messages,
-        model=MODEL_TOOLS,
-        tools=TOOL_SPECS,
-        tool_choice="auto",
-        temperature=0,
-        max_tokens=400,
-    )
-    msg = choice_message(data)
-    print("model:", data.get("model") or MODEL_TOOLS)
-    print("finish_reason:", finish_reason(data))
-    print("assistant content:", msg.get("content"))
-    print("tool_calls:", pretty(msg.get("tool_calls")))
 
-    tool_calls = msg.get("tool_calls") or []
-    if not tool_calls:
-        print("\nNo tool_calls — try another OPENROUTER_MODEL_TOOLS.")
-        return
-
-    messages.append(msg)
-    for tc in tool_calls:
-        fn = tc.get("function") or {}
-        name = fn.get("name") or ""
-        args = fn.get("arguments") or "{}"
-        result = run_tool(name, args)
-        print(f"\nran {name}({args}) -> {result}")
-        messages.append(
-            {
-                "role": "tool",
-                "tool_call_id": tc.get("id"),
-                "name": name,
-                "content": result,
-            }
+    for round_i in range(1, MAX_ROUNDS + 1):
+        data = chat(
+            messages,
+            model=MODEL_TOOLS,
+            tools=TOOL_SPECS,
+            tool_choice="auto",
+            temperature=0,
+            max_tokens=600,
         )
+        msg = choice_message(data)
 
-    data2 = chat(
-        messages,
-        model=MODEL_TOOLS,
-        tools=TOOL_SPECS,
-        temperature=0,
-        max_tokens=200,
-    )
-    print("\nfinal:", choice_message(data2).get("content"))
+        print(f"round {round_i} raw")
+        print("---")
+        print(pretty(data))
+        print("---")
+
+        tool_calls = msg.get("tool_calls") or []
+        if not tool_calls:
+            print("final")
+            print("---")
+            print(msg.get("content"))
+            return
+
+        messages.append(msg)
+        print(f"round {round_i} tools (local)")
+        print("---")
+        for tc in tool_calls:
+            fn = tc.get("function") or {}
+            name = fn.get("name") or ""
+            args = fn.get("arguments") or "{}"
+            result = run_tool(name, args)
+            print(f"ran {name}({args}) -> {result}")
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tc.get("id"),
+                    "name": name,
+                    "content": result,
+                }
+            )
+        print("---")
+
+    print(f"stop — hit MAX_ROUNDS={MAX_ROUNDS}")
 
 
 if __name__ == "__main__":
