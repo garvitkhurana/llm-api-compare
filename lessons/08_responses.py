@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from common import MODEL_CHAT, MODEL_TOOLS, chat, pretty
+from common import MODEL_CHAT, MODEL_TOOLS, chat, pretty, print_usage
 from tools import TOOL_SPECS
 
 
@@ -17,7 +17,7 @@ def show(label: str, data: dict) -> None:
     print("=" * 60)
     print(label)
     print("finish_reason:", choice.get("finish_reason"))
-    print("usage:", pretty(data.get("usage")))
+    print_usage(data)
     print("content:", msg.get("content"))
     print("tool_calls:", pretty(msg.get("tool_calls")))
 

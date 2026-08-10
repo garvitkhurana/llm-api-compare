@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from common import MODEL_CHAT, chat, choice_text, finish_reason, usage
+from common import MODEL_CHAT, chat, choice_text, finish_reason, print_usage
 
 
 def main() -> None:
@@ -17,9 +17,11 @@ def main() -> None:
         max_tokens=120,
     )
     print("finish_reason:", finish_reason(data))
-    print("usage:", usage(data))
+    print_usage(data)
     print("---")
     print(choice_text(data))
+    print("---")
+    print(data)
 
 
 if __name__ == "__main__":

@@ -12,16 +12,21 @@ from common import MODEL_CHAT, chat, choice_text, finish_reason
 
 def main() -> None:
     messages = [
-        {"role": "user", "content": "My favorite number is 17. Remember it."},
+        {"role": "user", "content": "Give me a secret code word."},
         {
             "role": "assistant",
-            "content": "Got it — your favorite number is 17.",
+            "content": "Secret code: GK.",  # only place code appears
         },
-        {"role": "user", "content": "What is my favorite number? Reply with only the number."},
+        {
+            "role": "user",
+            "content": "What secret code did you just give me? Reply with only the code.",
+        },
     ]
-    data = chat(messages, model=MODEL_CHAT, temperature=0, max_tokens=32)
+    data = chat(messages, model=MODEL_CHAT, temperature=0, max_tokens=128)
     print("finish_reason:", finish_reason(data))
     print("reply:", choice_text(data))
+    print("---")
+    print(data)
 
 
 if __name__ == "__main__":

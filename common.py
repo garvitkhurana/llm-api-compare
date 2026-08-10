@@ -215,5 +215,52 @@ def usage(data: dict[str, Any]) -> dict[str, Any] | None:
     return data.get("usage")
 
 
+def usage_breakdown(data: dict[str, Any]) -> dict[str, Any]:
+    """
+    Pricing-relevant token slice.
+
+    OpenRouter/OpenAI-style:
+      - prompt_tokens      ≈ input (what you send)
+      - completion_tokens  ≈ output bill bucket (often includes reasoning)
+      - reasoning_tokens   ≈ "thinking" (inside completion_tokens_details when present)
+      - total_tokens       ≈ prompt + completion (usual)
+
+    Visible answer text is NOT the same as completion_tokens when the model reasons.
+    """
+    u = usage(data) or {}
+    details = u.get("completion_tokens_details") or {}
+    prompt = u.get("prompt_tokens")
+    completion = u.get("completion_tokens")
+    reasoning = details.get("reasoning_tokens")
+    total = u.get("total_tokens")
+
+    # Best-effort: visible ≈ completion - reasoning when both are numbers
+    visible = None
+    if isinstance(completion, int) and isinstance(reasoning, int):
+        visible = max(completion - reasoning, 0)
+
+    return {
+        "input_prompt_tokens": prompt,
+        "output_completion_tokens": completion,
+        "thinking_reasoning_tokens": reasoning,
+        "visible_estimate": visible,
+        "total_tokens": total,
+        "cost": u.get("cost"),
+        "raw": u,
+    }
+
+
+def print_usage(data: dict[str, Any]) -> None:
+    b = usage_breakdown(data)
+    print("tokens (pricing view):")
+    print(f"  input    (prompt):     {b['input_prompt_tokens']}")
+    print(f"  output   (completion): {b['output_completion_tokens']}")
+    print(f"  thinking (reasoning):  {b['thinking_reasoning_tokens']}")
+    print(f"  visible  (est.):       {b['visible_estimate']}")
+    print(f"  total:                 {b['total_tokens']}")
+    if b.get("cost") is not None:
+        print(f"  cost (API field):      {b['cost']}")
+
+
 def pretty(obj: Any) -> str:
     return json.dumps(obj, indent=2, ensure_ascii=False)

@@ -27,43 +27,76 @@ def calculator(expression: str) -> dict[str, Any]:
     return {"ok": True, "expression": expression, "value": value}
 
 
-TOOL_SPECS: list[dict[str, Any]] = [
-    {
-        "type": "function",
-        "function": {
-            "name": "word_stats",
-            "description": "Count words, characters, and lines in a text string.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "text": {"type": "string", "description": "Text to analyze"},
-                },
-                "required": ["text"],
-            },
+def reverse_string(string: str) -> str:
+    """Reverse a string."""
+    return string[::-1]
+
+def list_tools() -> list[dict[str, Any]]:
+    """List all tools."""
+    return [name for name in DISPATCH.keys()]
+
+
+TOOL_SPECS = [
+  {
+    "type": "function",
+    "function": {
+      "name": "word_stats",
+      "description": "Count words, characters, and lines in text.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The text to analyze."
+          }
         },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "calculator",
-            "description": "Evaluate a simple arithmetic expression like '2 + 2 * 3'.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "expression": {
-                        "type": "string",
-                        "description": "Arithmetic expression",
-                    },
-                },
-                "required": ["expression"],
-            },
+        "required": ["text"],
+        "additionalProperties": False
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "calculator",
+      "description": "Evaluate a simple arithmetic expression using digits and +, -, *, /, %, parentheses, and decimal points.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "expression": {
+            "type": "string",
+            "description": "A simple arithmetic expression to evaluate."
+          }
         },
-    },
+        "required": ["expression"],
+        "additionalProperties": False
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "reverse_string",
+      "description": "Reverse a string.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "string": {
+            "type": "string",
+            "description": "The string to reverse."
+          }
+        },
+        "required": ["string"],
+        "additionalProperties": False
+      }
+    }
+  }
 ]
 
 DISPATCH = {
     "word_stats": lambda args: word_stats(**args),
     "calculator": lambda args: calculator(**args),
+    "reverse_string": lambda args: reverse_string(**args),
 }
 
 
