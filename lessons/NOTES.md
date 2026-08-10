@@ -1,0 +1,43 @@
+# Lesson notes
+
+Short concepts for each script. Run with `python lessons/NN_….py`.
+
+## 00 — Mental model
+API = send `{model, messages}`, get `{choices, finish_reason, usage}` back.
+
+## 01 — Message
+One user string → one assistant reply. Watch `finish_reason` (`stop` vs `length`).
+
+## 02 — Multi-message
+Conversation is a **list** of turns. Later turns see earlier ones.
+
+## 03 — Chat
+Roles: `system` / `user` / `assistant`. Knobs: `temperature`, `max_tokens`, `stop`.  
+Compares baseline vs constrained (strict system + stop phrases).  
+Optional table: `notebooks/03_chat_compare.ipynb`.
+
+## 04 — Tool
+A tool is a **Python function** you define. Call it yourself — no LLM yet.
+
+## 05 — Tool calling
+The **model** chooses a tool via `tool_calls`. You still execute it locally, then append the result.  
+Uses `MODEL_TOOLS` (must support OpenRouter `tools`).
+
+## 06 — MCP
+Same tools over a standard bus: start `mcp_server.py` → `list_tools` → `call_tool`.  
+No LLM required for this lesson.
+
+## 07 — Structured data
+Ask for JSON, then **validate** (pydantic). Fail loudly if the shape is wrong.
+
+## 08 — Responses
+Read the payload: `content`, `finish_reason`, `usage`, `tool_calls`. Debugging starts here.
+
+## 09 — Agent
+Loop: model → tool_calls? run tools & continue : return answer. Cap steps. No framework.
+
+## 10 — Gen evals
+Score **final text** against checks (`contains`, `max_chars`, …). Cases in `evals/gen_cases.jsonl`.
+
+## 11 — Agent evals
+Score **behavior**: task success, tools used, step budget. Cases in `evals/agent_cases.jsonl`.

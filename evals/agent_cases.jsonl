@@ -1,0 +1,3 @@
+{"id": "calc-basic", "task": "Use the calculator tool for 21 * 2. Reply with only the numeric value.", "max_steps": 4, "expect": {"tools_used_subset": ["calculator"], "success_substring": "42", "max_steps": 4}}
+{"id": "stats-basic", "task": "Use word_stats on the text 'one two three'. Tell me the word count only.", "max_steps": 4, "expect": {"tools_used_subset": ["word_stats"], "success_substring": "3", "max_steps": 4}}
+{"id": "both-tools", "task": "Use calculator for 2+2, then word_stats on 'hi there', then briefly report both.", "max_steps": 6, "expect": {"tools_used_subset": ["calculator", "word_stats"], "max_steps": 6}}

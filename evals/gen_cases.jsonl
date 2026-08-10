@@ -1,0 +1,3 @@
+{"id": "ping", "messages": [{"role": "user", "content": "Reply with exactly: pong"}], "checks": [{"type": "contains", "value": "pong"}, {"type": "max_chars", "value": 40}], "max_tokens": 32}
+{"id": "no-sure", "messages": [{"role": "system", "content": "Be terse. No greetings."}, {"role": "user", "content": "What is 2+2? One number only."}], "checks": [{"type": "contains", "value": "4"}, {"type": "not_contains", "value": "Sure"}], "max_tokens": 32}
+{"id": "short", "messages": [{"role": "user", "content": "Name one primary color. One word."}], "checks": [{"type": "max_chars", "value": 30}], "max_tokens": 16}
