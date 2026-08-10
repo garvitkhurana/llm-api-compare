@@ -2,6 +2,17 @@
 
 Short concepts for each script. Run with `python lessons/NN_….py`.
 
+## Reliability (all API lessons)
+
+Free OpenRouter flakes (timeouts, `429`, `502`, capacity). `common.chat` handles this:
+
+- timeouts `(connect=10s, read=60s)`
+- up to **3** attempts with backoff `~1s → 2s → 4s`
+- then **fallback models** from env (`OPENROUTER_MODEL_*_FALLBACKS`)
+- does **not** retry bad keys (`401`/`403`) or most `400`s
+
+You'll see `[common.chat] retry…` or `fallback model → …` in the terminal.
+
 ## 00 — Mental model
 API = send `{model, messages}`, get `{choices, finish_reason, usage}` back.
 

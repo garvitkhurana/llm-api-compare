@@ -19,7 +19,9 @@ cp .env.example .env   # add OPENROUTER_API_KEY
 |---|---|---|
 | `OPENROUTER_API_KEY` | required | — |
 | `OPENROUTER_MODEL_CHAT` | lessons 00–04, 06–08, 10 | `nvidia/nemotron-3-ultra-550b-a55b:free` |
-| `OPENROUTER_MODEL_TOOLS` | lessons **05, 09, 11, 12** (must support `tools`) | `openai/gpt-oss-20b:free` (see `.env.example`) |
+| `OPENROUTER_MODEL_CHAT_FALLBACKS` | tried after chat retries fail | `gemma-4-31b-it:free`, `gpt-oss-20b:free` |
+| `OPENROUTER_MODEL_TOOLS` | lessons **05, 09, 11, 12** (must support `tools`) | `openai/gpt-oss-20b:free` |
+| `OPENROUTER_MODEL_TOOLS_FALLBACKS` | tried after tools retries fail | `gemma-4-31b-it:free`, `openrouter/free` |
 
 Pick a tool-capable model: [openrouter.ai/models?supported_parameters=tools](https://openrouter.ai/models?supported_parameters=tools).
 
@@ -113,8 +115,31 @@ notebooks/         # optional tables only
 }
 ```
 
+## Reliability (free-tier fail-safe)
+
+Free OpenRouter flakes often (timeouts, `429`, `502`, capacity). All API lessons go through `common.chat`, which:
+
+1. Uses connect/read timeouts `(10s, 60s)`
+2. Retries up to **3** times with backoff `~1s → 2s → 4s`
+3. Retries on: timeouts, connection errors, `429` / `502` / `503`, capacity / rate body errors
+4. Does **not** retry: `401` / `403`, most `400`s
+5. Then tries **fallback models** from `OPENROUTER_MODEL_*_FALLBACKS`
+
+```mermaid
+flowchart TD
+  start[chat call] --> attempt[POST with timeout]
+  attempt -->|ok plus choices| done[return data]
+  attempt -->|timeout 429 502 exhausted| wait[backoff sleep]
+  wait --> retry{attempts left?}
+  retry -->|yes| attempt
+  retry -->|no| fallback{next fallback model?}
+  fallback -->|yes| attempt
+  fallback -->|no| fail[raise clear error]
+```
+
+Watch the terminal for `[common.chat] retry…` and `fallback model → …`.
+
 ## Notes
 
 - Lessons **00–11** are framework-free; **12** shows LangChain as optional sugar on the same loop.
-- Free-tier OpenRouter can return `error` with HTTP 200 when capacity is exhausted; wait and retry.
 - Older `compare_apis.ipynb` is superseded by lesson 03 (+ optional notebook).
