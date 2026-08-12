@@ -48,8 +48,9 @@ Prompt hits calculator / reverse_string / word_stats; loop until final text (`MA
 Banners per round; prints high-level **final convo memory** once at the end.
 
 ## 06 — MCP
-Same tools over a standard bus: start `mcp_server.py` → `list_tools` → `call_tool`.  
-No LLM required for this lesson.
+**Client** = `06_mcp.py`. **Server** = `mcp_server.py` (stdio JSON-RPC, no URL).  
+Client spawns the server, then `initialize` → `list_tools` → `call_tool`.  
+Do **not** run the server alone. Run: `python lessons/06_mcp.py`.
 
 ## 07 — Structured data
 Ask for JSON, then **validate** (pydantic). Fail loudly if the shape is wrong.
