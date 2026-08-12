@@ -20,6 +20,12 @@ def run_agent(
     """
     Loop: model → tool_calls? execute & continue : return final text.
     Returns {final, steps, messages, finish_reason}.
+
+    on_step events (type):
+      llm      — after each chat(); includes message + raw API payload
+      tool     — after each run_tool(); includes arguments + result (raw strings)
+      messages — high-level/full history after tools appended (before next chat)
+      final    — when returning a text answer
     """
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": system},
@@ -49,6 +55,8 @@ def run_agent(
                     "finish_reason": fr,
                     "n_tool_calls": len(tool_calls),
                     "content": msg.get("content"),
+                    "message": msg,  # assistant message dict
+                    "raw": data,  # full chat() API response
                 }
             )
 
@@ -79,9 +87,10 @@ def run_agent(
                 "step": step_i,
                 "round": llm_round,
                 "tool": name,
-                "arguments": raw_args,
-                "result": out,
+                "arguments": raw_args,  # raw JSON string from the model
+                "result": out,  # raw JSON string from run_tool
                 "tool_call_id": tc.get("id"),
+                "tool_call": tc,  # raw tool_call object from the model
             }
             steps.append(step)
             if on_step:
@@ -92,6 +101,15 @@ def run_agent(
                     "tool_call_id": tc.get("id"),
                     "name": name,
                     "content": out,
+                }
+            )
+
+        if on_step:
+            on_step(
+                {
+                    "type": "messages",
+                    "round": llm_round,
+                    "messages": list(messages),
                 }
             )
 
