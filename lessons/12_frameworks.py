@@ -2,6 +2,9 @@
 
 Frameworks sit on top of messages + tool_calls + the loop you built in 09.
 This lesson runs one task both ways so the mapping is obvious.
+
+Both halves honor LLM_PROVIDER (openrouter | anthropic) from .env —
+same switch as common.chat — so the LangChain path is not OpenRouter-only.
 """
 
 from __future__ import annotations
@@ -11,19 +14,44 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from langchain.agents import AgentExecutor, create_tool_calling_agent
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.tools import StructuredTool
-from langchain_openai import ChatOpenAI
+from langchain.agents import AgentExecutor, create_tool_calling_agent  # pyright: ignore[reportMissingImports]
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder  # pyright: ignore[reportMissingImports]
+from langchain_core.tools import StructuredTool  # pyright: ignore[reportMissingImports]
 
 from agent import run_agent, tools_used
-from common import API_KEY, MODEL_TOOLS, URL, require_api_key
+from common import (
+    ANTHROPIC_API_KEY,
+    ANTHROPIC_MODEL,
+    API_KEY,
+    LLM_PROVIDER,
+    MODEL_TOOLS,
+    URL,
+    require_api_key,
+)
 from tools import calculator, word_stats
 
 TASK = (
     "Use calculator for (10 + 5) * 2, then word_stats on 'framework sugar', "
     "then report both briefly."
 )
+
+
+def make_llm(*, temperature: float = 0.1):
+    # LangChain needs its own model object (not common.chat).
+    if LLM_PROVIDER == "anthropic":
+        from langchain_anthropic import ChatAnthropic  # pyright: ignore[reportMissingImports]
+
+        return ChatAnthropic(
+            model=ANTHROPIC_MODEL, api_key=ANTHROPIC_API_KEY, temperature=temperature
+        )
+    from langchain_openai import ChatOpenAI  # pyright: ignore[reportMissingImports]
+
+    return ChatOpenAI(
+        model=MODEL_TOOLS,
+        api_key=API_KEY,
+        base_url=URL.replace("/chat/completions", ""),
+        temperature=temperature,
+    )
 
 
 def run_raw() -> None:
@@ -45,12 +73,7 @@ def run_langchain() -> None:
     print("LANGCHAIN AgentExecutor (same tools + task)")
     print("=" * 60)
 
-    llm = ChatOpenAI(
-        model=MODEL_TOOLS,
-        api_key=API_KEY,
-        base_url=URL.replace("/chat/completions", ""),
-        temperature=0.1,
-    )
+    llm = make_llm()
     lc_tools = [
         StructuredTool.from_function(
             func=word_stats,
@@ -73,20 +96,30 @@ def run_langchain() -> None:
     agent = create_tool_calling_agent(llm, lc_tools, prompt)
     executor = AgentExecutor(agent=agent, tools=lc_tools, verbose=True, max_iterations=6)
     out = executor.invoke({"input": TASK})
-    print("final:", out.get("output"))
+    final = out.get("output")
+    # ChatAnthropic sometimes returns content blocks instead of a plain string
+    if isinstance(final, list):
+        final = "\n".join(
+            b.get("text", "") for b in final if isinstance(b, dict) and b.get("text")
+        ) or final
+    print("final:", final)
 
 
 def print_mapping() -> None:
     print("\n" + "=" * 60)
     print("What maps to what")
     print("=" * 60)
+    if LLM_PROVIDER == "anthropic":
+        print(f"provider: anthropic  model: {ANTHROPIC_MODEL}")
+    else:
+        print(f"provider: openrouter  model: {MODEL_TOOLS}")
     print(
         """
 | You built              | LangChain piece              |
 |------------------------|------------------------------|
 | tools.py functions     | StructuredTool / @tool       |
 | TOOL_SPECS JSON        | tool schemas (auto)          |
-| chat(..., tools=...)   | ChatOpenAI.bind_tools / agent|
+| chat(..., tools=...)   | ChatOpenAI / ChatAnthropic   |
 | agent.py while-loop    | AgentExecutor                |
 | messages list          | prompt + scratchpad          |
 | evals you wrote        | still yours (or Promptfoo)   |

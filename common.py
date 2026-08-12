@@ -15,21 +15,31 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT / ".env")
 
-API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
-URL = "https://openrouter.ai/api/v1/chat/completions"
+# openrouter (default) | anthropic — use Anthropic when OpenRouter free quota is dead
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "openrouter").strip().lower()
 
-# Chat / structured / gen-evals — free model is fine
+API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+URL = "https://openrouter.ai/api/v1/chat/completions"
+ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
+
+# Chat / structured / gen-evals
 MODEL_CHAT = os.environ.get(
     "OPENROUTER_MODEL_CHAT",
-    "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "openai/gpt-oss-20b:free",
 )
 # Tool-calling / agent / agent-evals — must support `tools`
 MODEL_TOOLS = os.environ.get(
     "OPENROUTER_MODEL_TOOLS",
     "openai/gpt-oss-20b:free",
 )
+# Used when LLM_PROVIDER=anthropic
+ANTHROPIC_MODEL = os.environ.get(
+    "ANTHROPIC_MODEL",
+    "claude-haiku-4-5",
+)
 
-# Comma-separated fallbacks tried after primary exhausts retries
+# Comma-separated fallbacks tried after primary exhausts retries (OpenRouter only)
 MODEL_CHAT_FALLBACKS = [
     m.strip()
     for m in os.environ.get(
@@ -54,6 +64,10 @@ RETRY_STATUSES = {429, 502, 503}
 
 
 def require_api_key() -> None:
+    if LLM_PROVIDER == "anthropic":
+        if not ANTHROPIC_API_KEY:
+            raise SystemExit("Set ANTHROPIC_API_KEY in .env (LLM_PROVIDER=anthropic)")
+        return
     if not API_KEY:
         raise SystemExit("Set OPENROUTER_API_KEY in .env (see .env.example)")
 
@@ -92,10 +106,226 @@ def _is_retryable_body_error(data: Any) -> bool:
     return any(n in text for n in needles)
 
 
+def _is_daily_free_quota(data: Any) -> bool:
+    """OpenRouter free-models-per-day — retries/fallbacks won't help until reset."""
+    text = _error_text(data).lower()
+    return "free-models-per-day" in text or "free model requests per day" in text
+
+
 def _backoff_sleep(attempt: int) -> None:
     # attempt 0 → ~1s, 1 → ~2s, 2 → ~4s
     delay = (2**attempt) + random.uniform(0, 0.25)
     time.sleep(delay)
+
+
+def _openai_tools_to_anthropic(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out = []
+    for t in tools:
+        fn = t.get("function") or t
+        out.append(
+            {
+                "name": fn["name"],
+                "description": fn.get("description") or "",
+                "input_schema": fn.get("parameters")
+                or {"type": "object", "properties": {}},
+            }
+        )
+    return out
+
+
+def _messages_to_anthropic(
+    messages: list[dict[str, Any]],
+) -> tuple[str | None, list[dict[str, Any]]]:
+    """Convert OpenAI-style messages to Anthropic system + messages."""
+    system_parts: list[str] = []
+    out: list[dict[str, Any]] = []
+
+    for m in messages:
+        role = m.get("role")
+        if role == "system":
+            system_parts.append(str(m.get("content") or ""))
+            continue
+
+        if role == "user":
+            out.append({"role": "user", "content": m.get("content") or ""})
+            continue
+
+        if role == "assistant":
+            blocks: list[dict[str, Any]] = []
+            text = m.get("content")
+            if text:
+                blocks.append({"type": "text", "text": text})
+            for tc in m.get("tool_calls") or []:
+                fn = tc.get("function") or {}
+                raw = fn.get("arguments") or "{}"
+                try:
+                    args = json.loads(raw) if isinstance(raw, str) else raw
+                except json.JSONDecodeError:
+                    args = {}
+                blocks.append(
+                    {
+                        "type": "tool_use",
+                        "id": tc.get("id") or "tool",
+                        "name": fn.get("name") or "",
+                        "input": args,
+                    }
+                )
+            if not blocks:
+                blocks = [{"type": "text", "text": ""}]
+            out.append({"role": "assistant", "content": blocks})
+            continue
+
+        if role == "tool":
+            # Anthropic wants tool_result inside a user message
+            block = {
+                "type": "tool_result",
+                "tool_use_id": m.get("tool_call_id") or "",
+                "content": str(m.get("content") or ""),
+            }
+            if out and out[-1].get("role") == "user" and isinstance(
+                out[-1].get("content"), list
+            ):
+                out[-1]["content"].append(block)
+            else:
+                out.append({"role": "user", "content": [block]})
+            continue
+
+    system = "\n\n".join(p for p in system_parts if p).strip() or None
+    return system, out
+
+
+def _anthropic_to_openai_shape(data: dict[str, Any], model: str) -> dict[str, Any]:
+    """Normalize Anthropic Messages response to OpenAI chat.completion shape."""
+    content_blocks = data.get("content") or []
+    texts: list[str] = []
+    tool_calls: list[dict[str, Any]] = []
+    for b in content_blocks:
+        if not isinstance(b, dict):
+            continue
+        if b.get("type") == "text":
+            texts.append(b.get("text") or "")
+        elif b.get("type") == "tool_use":
+            tool_calls.append(
+                {
+                    "id": b.get("id"),
+                    "type": "function",
+                    "function": {
+                        "name": b.get("name"),
+                        "arguments": json.dumps(b.get("input") or {}),
+                    },
+                }
+            )
+
+    stop = data.get("stop_reason")
+    finish = "tool_calls" if tool_calls or stop == "tool_use" else "stop"
+    msg: dict[str, Any] = {
+        "role": "assistant",
+        "content": "\n".join(texts) if texts else None,
+    }
+    if tool_calls:
+        msg["tool_calls"] = tool_calls
+
+    usage_in = data.get("usage") or {}
+    return {
+        "id": data.get("id"),
+        "object": "chat.completion",
+        "model": model,
+        "choices": [
+            {
+                "index": 0,
+                "message": msg,
+                "finish_reason": finish,
+            }
+        ],
+        "usage": {
+            "prompt_tokens": usage_in.get("input_tokens"),
+            "completion_tokens": usage_in.get("output_tokens"),
+            "total_tokens": (usage_in.get("input_tokens") or 0)
+            + (usage_in.get("output_tokens") or 0),
+        },
+        "provider": "anthropic",
+    }
+
+
+def _chat_anthropic(
+    messages: list[dict[str, Any]],
+    *,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    tools: list[dict[str, Any]] | None,
+    tool_choice: Any,
+) -> dict[str, Any]:
+    system, anth_messages = _messages_to_anthropic(messages)
+    payload: dict[str, Any] = {
+        "model": model,
+        "messages": anth_messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    }
+    if system:
+        payload["system"] = system
+    if tools is not None:
+        payload["tools"] = _openai_tools_to_anthropic(tools)
+        if tool_choice == "auto" or tool_choice is None:
+            payload["tool_choice"] = {"type": "auto"}
+        elif tool_choice == "required":
+            payload["tool_choice"] = {"type": "any"}
+        elif isinstance(tool_choice, dict):
+            payload["tool_choice"] = tool_choice
+
+    last_error: Exception | None = None
+    for attempt in range(MAX_ATTEMPTS):
+        try:
+            r = requests.post(
+                ANTHROPIC_URL,
+                headers={
+                    "x-api-key": ANTHROPIC_API_KEY,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json=payload,
+                timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),
+            )
+        except (requests.Timeout, requests.ConnectionError) as e:
+            last_error = e
+            if attempt + 1 < MAX_ATTEMPTS:
+                print(
+                    f"[common.chat] anthropic retry {attempt + 2}/{MAX_ATTEMPTS} "
+                    f"after {type(e).__name__}",
+                    flush=True,
+                )
+                _backoff_sleep(attempt)
+                continue
+            break
+
+        data: Any = {}
+        try:
+            data = r.json() if r.content else {}
+        except ValueError:
+            data = {}
+
+        if r.status_code in (401, 403):
+            raise RuntimeError(
+                f"Anthropic HTTP {r.status_code}: {_error_text(data, r.text)}"
+            )
+        if r.ok and isinstance(data, dict) and data.get("content") is not None:
+            return _anthropic_to_openai_shape(data, model)
+
+        last_error = RuntimeError(
+            f"Anthropic HTTP {r.status_code}: {_error_text(data, r.text)}"
+        )
+        if r.status_code in RETRY_STATUSES and attempt + 1 < MAX_ATTEMPTS:
+            print(
+                f"[common.chat] anthropic retry {attempt + 2}/{MAX_ATTEMPTS} "
+                f"after HTTP {r.status_code}",
+                flush=True,
+            )
+            _backoff_sleep(attempt)
+            continue
+        break
+
+    raise RuntimeError(f"Anthropic failed: {last_error}")
 
 
 def chat(
@@ -108,8 +338,30 @@ def chat(
     tools: list[dict[str, Any]] | None = None,
     tool_choice: Any = None,
 ) -> dict[str, Any]:
-    """POST chat/completions with retries, backoff, and free-model fallbacks."""
+    """POST chat/completions (OpenRouter) or Messages (Anthropic)."""
     require_api_key()
+
+    if LLM_PROVIDER == "anthropic":
+        mid = model if model and not model.endswith(":free") else ANTHROPIC_MODEL
+        # Ignore OpenRouter free model ids when on Anthropic
+        if "/" in mid and mid.split("/", 1)[0] in {
+            "openai",
+            "google",
+            "nvidia",
+            "openrouter",
+            "meta-llama",
+        }:
+            mid = ANTHROPIC_MODEL
+        print(f"[common.chat] provider=anthropic model={mid}", flush=True)
+        return _chat_anthropic(
+            messages,
+            model=mid,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            tools=tools,
+            tool_choice=tool_choice,
+        )
+
     primary = model or MODEL_CHAT
     use_tools = tools is not None
     models = _model_chain(primary, tools=use_tools)
@@ -117,7 +369,7 @@ def chat(
 
     for model_i, mid in enumerate(models):
         if model_i > 0:
-            print(f"[common.chat] fallback model → {mid}")
+            print(f"[common.chat] fallback model → {mid}", flush=True)
 
         for attempt in range(MAX_ATTEMPTS):
             payload: dict[str, Any] = {
@@ -148,7 +400,8 @@ def chat(
                 if attempt + 1 < MAX_ATTEMPTS:
                     print(
                         f"[common.chat] retry {attempt + 2}/{MAX_ATTEMPTS} "
-                        f"after {type(e).__name__} on {mid}"
+                        f"after {type(e).__name__} on {mid}",
+                        flush=True,
                     )
                     _backoff_sleep(attempt)
                     continue
@@ -163,6 +416,19 @@ def chat(
             if r.status_code in (401, 403):
                 raise RuntimeError(
                     f"HTTP {r.status_code} (not retrying): {_error_text(data, r.text)}"
+                )
+
+            # Prefer body text; also catch daily free cap via headers
+            remaining = r.headers.get("X-RateLimit-Remaining")
+            if _is_daily_free_quota(data) or (
+                r.status_code == 429
+                and remaining == "0"
+                and "free" in _error_text(data, r.text).lower()
+            ):
+                raise RuntimeError(
+                    "OpenRouter free-models-per-day quota exhausted "
+                    "(retries won't help). Wait for daily reset, add credits, "
+                    f"or use a paid model. Detail: {_error_text(data, r.text)}"
                 )
 
             if r.status_code == 400 and not _is_retryable_body_error(data):
@@ -188,7 +454,8 @@ def chat(
             if retryable and attempt + 1 < MAX_ATTEMPTS:
                 print(
                     f"[common.chat] retry {attempt + 2}/{MAX_ATTEMPTS} "
-                    f"after HTTP {r.status_code} on {mid}"
+                    f"after HTTP {r.status_code} on {mid}",
+                    flush=True,
                 )
                 _backoff_sleep(attempt)
                 continue

@@ -18,12 +18,15 @@ cp .env.example .env   # add OPENROUTER_API_KEY
 | Env | Purpose | Default |
 |---|---|---|
 | `OPENROUTER_API_KEY` | required | — |
-| `OPENROUTER_MODEL_CHAT` | lessons 00–04, 06–08, 10 | `nvidia/nemotron-3-ultra-550b-a55b:free` |
+| `OPENROUTER_MODEL_CHAT` | lessons 00–04, 07–08, 10 | `openai/gpt-oss-20b:free` |
 | `OPENROUTER_MODEL_CHAT_FALLBACKS` | tried after chat retries fail | `gemma-4-31b-it:free`, `gpt-oss-20b:free` |
 | `OPENROUTER_MODEL_TOOLS` | lessons **05, 09, 11, 12** (must support `tools`) | `openai/gpt-oss-20b:free` |
 | `OPENROUTER_MODEL_TOOLS_FALLBACKS` | tried after tools retries fail | `gemma-4-31b-it:free`, `openrouter/free` |
 
+Free Nemotron often stalls on OpenRouter — prefer `gpt-oss` for chat/evals (see `.env.example`).  
 Pick a tool-capable model: [openrouter.ai/models?supported_parameters=tools](https://openrouter.ai/models?supported_parameters=tools).
+
+**Concepts / FAQ:** [lessons/NOTES.md](lessons/NOTES.md) (one-pager: tokens, tools registry, MCP stdio, agent hooks, evals).
 
 ## Curriculum
 
@@ -93,11 +96,11 @@ Concept notes: [lessons/NOTES.md](lessons/NOTES.md).
 ## Layout
 
 ```
-common.py          # OpenRouter chat helpers
-tools.py           # word_stats, calculator
-agent.py           # minimal tool loop
-mcp_server.py      # stdio MCP server
-lessons/           # NN_*.py scripts + NOTES.md
+common.py          # OpenRouter chat + usage helpers + retries
+tools.py           # word_stats, calculator, reverse_string + TOOL_SPECS/DISPATCH
+agent.py           # minimal tool loop + on_step hooks
+mcp_server.py      # stdio MCP server (tools + sample resources)
+lessons/           # NN_*.py scripts + NOTES.md (cheat sheet)
 evals/             # gen_cases.jsonl, agent_cases.jsonl
 notebooks/         # optional tables only
 ```
@@ -143,3 +146,4 @@ Watch the terminal for `[common.chat] retry…` and `fallback model → …`.
 
 - Lessons **00–11** are framework-free; **12** shows LangChain as optional sugar on the same loop.
 - Older `compare_apis.ipynb` is superseded by lesson 03 (+ optional notebook).
+- Deep dive / “why does X work this way?” → [lessons/NOTES.md](lessons/NOTES.md).
