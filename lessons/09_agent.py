@@ -18,12 +18,23 @@ def main() -> None:
     )
 
     def on_step(event: dict) -> None:
-        if event.get("type") == "tool":
-            print(f"[tool] {event['tool']}({event['arguments']}) -> {event['result']}")
+        kind = event.get("type")
+        if kind == "llm":
+            print(
+                f"[llm] round {event['round']} "
+                f"(finish={event['finish_reason']}, tool_calls={event['n_tool_calls']})"
+            )
+        elif kind == "tool":
+            print(
+                f"[tool] (in llm round {event['round']}) "
+                f"{event['tool']}({event['arguments']}) -> {event['result']}"
+            )
+        elif kind == "final":
+            print(f"[final] after {event['step_count']} LLM round(s)")
 
     result = run_agent(task, max_steps=6, on_step=on_step)
     print("\ntools_used:", tools_used(result["steps"]))
-    print("step_count:", result["step_count"])
+    print("step_count (LLM rounds):", result["step_count"])
     print("finish_reason:", result["finish_reason"])
     print("final:", result["final"])
     if result.get("error"):

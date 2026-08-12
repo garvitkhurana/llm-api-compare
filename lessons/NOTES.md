@@ -59,7 +59,8 @@ Ask for JSON, then **validate** (pydantic). Fail loudly if the shape is wrong.
 Read the payload: `content`, `finish_reason`, `usage` (via `print_usage`), `tool_calls`. Debugging starts here.
 
 ## 09 — Agent
-Loop: model → tool_calls? run tools & continue : return answer. Cap steps. No framework.
+Loop: model → tool_calls? run tools & continue : return answer. Cap steps. No framework.  
+`on_step` hook events: `llm` (raw API + message), `tool` (raw args/result), `messages` (history), `final`.
 
 ## 10 — Gen evals
 Score **final text** against checks (`contains`, `max_chars`, …). Cases in `evals/gen_cases.jsonl`.

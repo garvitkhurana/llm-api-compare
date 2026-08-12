@@ -29,6 +29,8 @@ def run_agent(
     tool_list = tools if tools is not None else TOOL_SPECS
 
     for step_i in range(max_steps):
+        # One loop iteration = one LLM call (not one tool).
+        llm_round = step_i + 1
         data = chat(
             messages,
             model=model or MODEL_TOOLS,
@@ -39,6 +41,16 @@ def run_agent(
         msg = choice_message(data)
         fr = finish_reason(data)
         tool_calls = msg.get("tool_calls") or []
+        if on_step:
+            on_step(
+                {
+                    "type": "llm",
+                    "round": llm_round,
+                    "finish_reason": fr,
+                    "n_tool_calls": len(tool_calls),
+                    "content": msg.get("content"),
+                }
+            )
 
         assistant_msg: dict[str, Any] = {"role": "assistant", "content": msg.get("content")}
         if tool_calls:
@@ -51,12 +63,13 @@ def run_agent(
                 "steps": steps,
                 "messages": messages,
                 "finish_reason": fr,
-                "step_count": step_i + 1,
+                "step_count": llm_round,  # number of LLM chat() calls
             }
             if on_step:
                 on_step({"type": "final", **result})
             return result
 
+        # One LLM reply can request MANY tools; each is a local run_tool, not a new LLM call.
         for tc in tool_calls:
             fn = tc.get("function") or {}
             name = fn.get("name") or ""
@@ -64,6 +77,7 @@ def run_agent(
             out = run_tool(name, raw_args)
             step = {
                 "step": step_i,
+                "round": llm_round,
                 "tool": name,
                 "arguments": raw_args,
                 "result": out,
