@@ -16,6 +16,66 @@ messages  ──chat()──►  model
 evals: score that text (10) or the trajectory (11)
 ```
 
+Layers (add what you're missing — they don't replace the loop):
+
+```mermaid
+flowchart TB
+  subgraph tools_how["How tools are exposed"]
+    PY["tools.py + run_tool<br/>in-process Python"]
+    MCP["MCP<br/>stdio plugin: call_tool<br/>lesson 06"]
+  end
+
+  subgraph wire["The wire"]
+    LOOP["while: LLM → tool_calls? → run → append → repeat<br/>agent.py / lesson 05"]
+  end
+
+  subgraph who_loop["Who writes the while?"]
+    DIY["you: agent.py"]
+    LC["LangChain AgentExecutor"]
+    ST["Strands"]
+  end
+
+  subgraph who_next["Who picks the next step?"]
+    MODEL["Model-driven<br/>DIY · LangChain · Strands"]
+    GRAPH["You-driven flowchart<br/>LangGraph"]
+  end
+
+  subgraph ops["Watch / score / ship"]
+    EVAL["lessons 10–11 jsonl"]
+    LS["LangSmith traces + evals"]
+  end
+
+  subgraph room["Humans + agents together"]
+    BUZZ["Buzz: channels, git, audit<br/>agents are members"]
+  end
+
+  PY --> LOOP
+  MCP --> LOOP
+  LOOP --> DIY
+  LOOP --> LC
+  LOOP --> ST
+  DIY --> MODEL
+  LC --> MODEL
+  ST --> MODEL
+  GRAPH -.-> LOOP
+  DIY --> EVAL
+  LC --> LS
+  GRAPH --> LS
+  ST --> LS
+  DIY -.-> BUZZ
+  LC -.-> BUZZ
+  ST -.-> BUZZ
+```
+
+| Layer | Thing | Job |
+|-------|--------|-----|
+| Expose tools | `tools.py`, **MCP** | in-process vs plugin process (`call_tool`) |
+| Wire | `agent.py`, lesson 05/09 | messages + `tool_calls` + run + append |
+| Sugar loop | LangChain, Strands | same loop, they write the `while` |
+| Flowchart | LangGraph | **you** fix the path; model fills nodes |
+| Observe | 10–11, LangSmith | score text/trajectory; prod traces |
+| Room | Buzz | humans + agents share channels / git / audit |
+
 | Idea | Takeaway |
 |---|---|
 | **API memory** | No server session. Whatever is in your `messages` list *is* the convo. Resend it every `chat()`. |
@@ -112,3 +172,5 @@ Daily `429` / `free-models-per-day` fails fast now (no endless retries).
 ### 12 — Frameworks (optional)
 Same task raw vs LangChain. Sugar on messages + tool_calls + the loop — learn 00–11 first.
 Both halves follow `LLM_PROVIDER` (OpenRouter or Anthropic); LangChain is not OpenRouter-only.
+
+MCP is not a framework: it's how tools are *served*. LangGraph is a flowchart (you own control flow). LangSmith watches/evals. Buzz is a workspace, not a loop. See one-pager diagram.
