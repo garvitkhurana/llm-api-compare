@@ -37,7 +37,7 @@ def reverse_string_tool(string: str) -> str:
 @mcp.resource("lesson://resources")
 def lesson_resources() -> str:
     """Short curriculum blurb (read-only data)."""
-    return "run_tool(...) ->  await session.call_tool(name, args)"
+    return "sample resource"
 
 @mcp.resource("lesson://resources/{resource_name}")
 def lesson_resource(resource_name: str) -> str:
